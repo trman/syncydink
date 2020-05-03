@@ -145,21 +145,26 @@
                     <v-subheader>MQTT</v-subheader>
                       <v-text-field
                       clearable
+                      v-if="!mqttConnected"
                       v-model="mqttServer"
                       label="MQTT-Server"></v-text-field>
                       <v-text-field
                       clearable
+                      v-if="!mqttConnected"
                       v-model="mqttTopic"
                       label="Publish Topic"></v-text-field>
                       <v-checkbox
                       v-model="mqttAuth"
+                      v-if="!mqttConnected"
                       label="Auth"></v-checkbox>
                       <v-flex row v-if="mqttAuth">
                         <v-text-field
+                        v-if="!mqttConnected"
                         label="MQTT-User"
                         class="form-text"
                         v-model="mqttUser"></v-text-field>
                         <v-text-field
+                        v-if="!mqttConnected"
                         label="MQTT-Password"
                         class="form-password"
                         v-model="mqttPassword"></v-text-field>
@@ -167,6 +172,9 @@
                       <v-btn
                         v-if="!mqttConnected"
                         @click="connectMqtt">Connect</v-btn>
+                        <v-btn
+                        v-if="mqttConnected"
+                        @click="disconnectMqtt">Disconnect</v-btn>
                   </v-flex>
 
 

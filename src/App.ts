@@ -21,10 +21,10 @@ import PatreonButtonComponent from "./components/PatreonButton/PatreonButton.vue
 import * as Mousetrap from "mousetrap";
 import { ButtplugPanelComponent } from "vue-buttplug-material-component";
 
-import loadModel from "./utils/Tfs";
 import { utils } from "aframe";
 import { watch } from "fs";
 import { connect, MqttClient } from "mqtt";
+import { local } from "d3";
 
 @Component({
   components: {
@@ -50,11 +50,11 @@ export default class App extends Vue {
   private videoFile: File | string | null = null;
 
   private mqttConnected: boolean = false;
-  private mqttServer: string | null = "ws://localhost:9001";
-  private mqttTopic: string = "syncydink";
-  private mqttAuth: boolean = false;
-  private mqttUser: string | null = null;
-  private mqttPassword: string | null = null;
+  private mqttServer: string = localStorage.getItem("mqttServer") || "ws://localhost:9001";
+  private mqttTopic: string = localStorage.getItem("mqttTopic") || "syncydink";
+  private mqttAuth: boolean = localStorage.getItem("mqttAuth") === "true";
+  private mqttUser: string | null = localStorage.getItem("mqttUser");
+  private mqttPassword: string | null = localStorage.getItem("mqttPassword");
   private mqttClient: MqttClient | null = null;
   private mqttLastPublishedPlaytime: number = 0;
   private currentPlayTime: number = 0;
@@ -81,7 +81,7 @@ export default class App extends Vue {
   private devices: ButtplugClientDevice[] = [];
 
   // Tobii properties
-  private readonly tobiiAddress: string = "ws://localhost:";
+  private readonly tobiiAddress: string = "ws://localhost:TODOPORT";
 
   /////////////////////////////////////
   // Component and UI methods
@@ -96,6 +96,10 @@ export default class App extends Vue {
     }
     Mousetrap.bind("esc", () => this.ToggleLeftSideNav());
     // this.loadHapticsTestData();
+
+    if (localStorage.getItem("mqttConnectedSuccessfully") === "true") {
+      this.connectMqtt();
+    }
   }
 
   private SideNavOpen() {
@@ -129,19 +133,45 @@ export default class App extends Vue {
     process.nextTick(() => window.dispatchEvent(new Event("resize")));
   }
 
-  @Watch("loadTensorflowModel")
-  private OnLoadTensorFlowModel() {
-    loadModel();
+  private rememberMqttSettings() {
+    localStorage.setItem("mqttServer", this.mqttServer);
+    localStorage.setItem("mqttTopic", this.mqttTopic);
+    localStorage.setItem("mqttAuth", this.mqttAuth ? "true" : "false");
+    if (this.mqttUser) {
+      localStorage.setItem("mqttUser", this.mqttUser);
+    } else {
+      localStorage.removeItem("mqttUser");
+    }
+    if (this.mqttPassword) {
+      localStorage.setItem("mqttPassword", this.mqttPassword);
+    } else {
+      localStorage.removeItem("mqttPassword");
+    }
+  }
+
+  private disconnectMqtt() {
+    this.mqttClient?.end(true, {}, () => {
+      this.mqttClient = null;
+      this.mqttConnected = false;
+      localStorage.removeItem("mqttConnectedSuccessfully");
+    });
   }
 
   private connectMqtt() {
+    this.rememberMqttSettings();
+    this.disconnectMqtt();
+
     this.mqttClient = connect(this.mqttServer, {
       username: this.mqttUser || undefined,
       password: this.mqttPassword || undefined,
       will: { topic: `${this.mqttTopic}/state`, qos: 1, retain: true, payload: "gone" },
     });
     this.mqttClient.once("connect",
-      () => this.mqttClient?.publish(`${this.mqttTopic}/state`, "ready", { retain: true, qos: 1 }));
+      () => {
+        this.mqttClient?.publish(`${this.mqttTopic}/state`, "ready", { retain: true, qos: 1 });
+        this.mqttConnected = true;
+        localStorage.setItem("mqttConnectedSuccessfully", "true");
+      });
 
     this.mqttClient.subscribe(`${this.mqttTopic}/pause/set`, { qos: 1 });
     this.mqttClient.subscribe(`${this.mqttTopic}/play/set`, { qos: 1 });
