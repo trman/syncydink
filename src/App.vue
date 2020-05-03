@@ -64,6 +64,7 @@
               @videoPlaying="onPlay"
               @videoPaused="onPause"
               @timeUpdate="onTimeUpdate"
+              @progress="onProgress"
               @videoLoaded="onVideoLoaded"
             />
           </v-flex>
@@ -91,6 +92,12 @@
             </v-tab>
             <v-tab href="#buttplugpanel">
               Buttplug
+            </v-tab>
+            <v-tab href="#tobiipanel">
+              Tobii
+            </v-tab>
+            <v-tab href="#tfspanel">
+              Tensorflow.js
             </v-tab>
             <v-tab href="#aboutpanel">
               About
@@ -127,6 +134,42 @@
                       v-model="showHapticsTimeline"
                       label="Show Haptics Timeline"></v-checkbox>
                   </v-flex>
+                  <v-flex>
+                    <v-subheader>Optics</v-subheader>
+                    <!-- need file input here -->
+                    <v-checkbox
+                      v-model="loadTensorflowModel"
+                      label="Load Tensorflow Model"></v-checkbox>
+                  </v-flex>
+                  <v-flex>
+                    <v-subheader>MQTT</v-subheader>
+                      <v-text-field
+                      clearable
+                      v-model="mqttServer"
+                      label="MQTT-Server"></v-text-field>
+                      <v-text-field
+                      clearable
+                      v-model="mqttTopic"
+                      label="Publish Topic"></v-text-field>
+                      <v-checkbox
+                      v-model="mqttAuth"
+                      label="Auth"></v-checkbox>
+                      <v-flex row v-if="mqttAuth">
+                        <v-text-field
+                        label="MQTT-User"
+                        class="form-text"
+                        v-model="mqttUser"></v-text-field>
+                        <v-text-field
+                        label="MQTT-Password"
+                        class="form-password"
+                        v-model="mqttPassword"></v-text-field>
+                      </v-flex>
+                      <v-btn
+                        v-if="!mqttConnected"
+                        @click="connectMqtt">Connect</v-btn>
+                  </v-flex>
+
+
                   <!-- <v-flex v-if="this.hapticCommandsSize != 0">
                        <ul class="haptics-info">
                        <li># of Haptic Commands Loaded: {{ this.hapticCommandsSize }}</li>
@@ -141,6 +184,24 @@
                   @deviceconnected="OnDeviceConnected"
                   @devicedisconnected="OnDeviceDisconnected"
                 />
+              </v-tab-item>
+              <v-tab-item id="tobiipanel">
+                  <v-layout column id="buttplug-connection-manager" class="buttplug-sidebar">
+                  <v-subheader>Connection</v-subheader>
+                  <v-flex row v-if="!isTobiiConnected">
+                    <v-text-field
+                      label="TobiiSocketServer Address"
+                      class="form-text"
+                      v-model="tobiiAddress">
+                    </v-text-field>
+                  </v-flex>
+                  <v-btn
+                    v-if="!isTobiiConnected"
+                    @click="connectTobii">Connect</v-btn>
+                  </v-layout>
+              </v-tab-item>
+              <v-tab-item id="tfspanel">
+                <p>TFS!</p>
               </v-tab-item>
               <v-tab-item id="aboutpanel">
                 <p><b>Syncydink</b></p>

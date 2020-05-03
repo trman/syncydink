@@ -4,9 +4,14 @@ import VFileInput from "./components/VFileInput/VFileInput.vue";
 
 const AppConfig = require("../dist/appconfig.json");
 
-import { ButtplugClientDevice, ButtplugDeviceMessage, ButtplugMessage } from "buttplug";
-import { HapticCommand, KiirooCommand, HapticFileHandler, LoadFile, LoadString,
-         FunscriptCommand } from "haptic-movie-file-reader";
+import {
+  ButtplugClientDevice, ButtplugDeviceMessage, ButtplugMessage, FleshlightLaunchFW12Cmd,
+  SingleMotorVibrateCmd,
+} from "buttplug";
+import {
+  HapticCommand, KiirooCommand, HapticFileHandler, LoadFile, LoadString,
+  FunscriptCommand,
+} from "haptic-movie-file-reader";
 
 import HapticCommandToButtplugMessage from "./utils/HapticsToButtplug";
 import VideoPlayerComponent from "./components/VideoPlayer/VideoPlayer.vue";
@@ -15,6 +20,11 @@ import PatreonButtonComponent from "./components/PatreonButton/PatreonButton.vue
 
 import * as Mousetrap from "mousetrap";
 import { ButtplugPanelComponent } from "vue-buttplug-material-component";
+
+import loadModel from "./utils/Tfs";
+import { utils } from "aframe";
+import { watch } from "fs";
+import { connect, MqttClient } from "mqtt";
 
 @Component({
   components: {
@@ -38,10 +48,21 @@ export default class App extends Vue {
   private loopVideo: boolean = true;
   private vrMode: boolean = false;
   private videoFile: File | string | null = null;
+
+  private mqttConnected: boolean = false;
+  private mqttServer: string | null = "ws://localhost:9001";
+  private mqttTopic: string = "syncydink";
+  private mqttAuth: boolean = false;
+  private mqttUser: string | null = null;
+  private mqttPassword: string | null = null;
+  private mqttClient: MqttClient | null = null;
+  private mqttLastPublishedPlaytime: number = 0;
   private currentPlayTime: number = 0;
 
   // Haptic selection properties
   private showHapticsTimeline: boolean = false;
+  private loadTensorflowModel: boolean = false;
+  private isTobiiConnected: boolean = false;
   private showSimulator: boolean = false;
   private hapticsCommands: FunscriptCommand[] = [];
   private commands: Map<number, ButtplugDeviceMessage[]> = new Map();
@@ -53,10 +74,14 @@ export default class App extends Vue {
   private lastIndexRetrieved: number = -1;
   private lastTimeChecked: number = 0;
   private desiredPlayTime: number = 0;
+
   private currentMessages: ButtplugMessage[] = [];
 
   // Buttplug properties
   private devices: ButtplugClientDevice[] = [];
+
+  // Tobii properties
+  private readonly tobiiAddress: string = "ws://localhost:";
 
   /////////////////////////////////////
   // Component and UI methods
@@ -104,6 +129,35 @@ export default class App extends Vue {
     process.nextTick(() => window.dispatchEvent(new Event("resize")));
   }
 
+  @Watch("loadTensorflowModel")
+  private OnLoadTensorFlowModel() {
+    loadModel();
+  }
+
+  private connectMqtt() {
+    this.mqttClient = connect(this.mqttServer, {
+      username: this.mqttUser || undefined,
+      password: this.mqttPassword || undefined,
+      will: { topic: `${this.mqttTopic}/state`, qos: 1, retain: true, payload: "gone" },
+    });
+    this.mqttClient.once("connect",
+      () => this.mqttClient?.publish(`${this.mqttTopic}/state`, "ready", { retain: true, qos: 1 }));
+
+    this.mqttClient.subscribe(`${this.mqttTopic}/pause/set`, { qos: 1 });
+    this.mqttClient.subscribe(`${this.mqttTopic}/play/set`, { qos: 1 });
+
+    this.mqttClient.on("message", (topic) => {
+      if (topic === `${this.mqttTopic}/pause/set`) {
+        console.info("pausing");
+        this.onPause();
+      } else if (topic === `${this.mqttTopic}/play/set`) {
+        this.onPlay();
+        console.info("playing");
+      }
+    });
+
+  }
+
   /////////////////////////////////////
   // Buttplug Event Handlers
   /////////////////////////////////////
@@ -142,6 +196,9 @@ export default class App extends Vue {
       this.hapticsCommands.push(new FunscriptCommand(0, 0));
       this.hapticsCommands.push(new FunscriptCommand(duration, 0));
     }
+    if (this.mqttClient && this.mqttClient.connected) {
+      this.mqttClient.publish(`${this.mqttTopic}/duration`, `${duration}`, { retain: true, qos: 1 });
+    }
   }
 
   private onHapticsFileChange(hapticsFile: FileList) {
@@ -161,6 +218,9 @@ export default class App extends Vue {
   private onPlay() {
     this.paused = false;
     this.runHapticsLoop();
+    if (this.mqttClient && this.mqttClient.connected) {
+      this.mqttClient.publish(`${this.mqttTopic}/playing`, "true", { retain: true, qos: 1 });
+    }
   }
 
   private onPause() {
@@ -168,10 +228,17 @@ export default class App extends Vue {
     if (this.devices.length > 0) {
       (Vue as any).Buttplug.StopAllDevices();
     }
+    if (this.mqttClient && this.mqttClient.connected) {
+      this.mqttClient.publish(`${this.mqttTopic}/playing`, "false", { retain: true, qos: 1 });
+    }
   }
 
   private onTimeUpdate(time: number) {
     this.currentPlayTime = time;
+    if (this.mqttClient && this.mqttClient.connected && (time - this.mqttLastPublishedPlaytime) > 100) {
+      this.mqttLastPublishedPlaytime = time;
+      this.mqttClient.publish(`${this.mqttTopic}/currentPlayTime`, `${time}`, { retain: true, qos: 1 });
+    }
   }
 
   private onInputTimeUpdate(time: number) {
@@ -207,10 +274,23 @@ export default class App extends Vue {
       while (this.currentPlayTime > this.commandTimes[this.lastIndexRetrieved + 1]) {
         this.lastIndexRetrieved += 1;
       }
-      const msgs = this.commands.get(this.commandTimes[this.lastIndexRetrieved]);
+
+      const currentMsgTime = this.commandTimes[this.lastIndexRetrieved];
+
+      const msgs = this.commands.get(currentMsgTime) || [];
       if (msgs !== undefined) {
         this.currentMessages = msgs!;
         for (const aMsg of msgs) {
+
+          if (this.mqttClient && this.mqttClient.connected) {
+            if (aMsg instanceof FleshlightLaunchFW12Cmd) {
+              // this.mqttClient.publish(`${this.mqttTopic}/${aMsg.Type.name}/Position`, `${aMsg.Position}`);
+              // this.mqttClient.publish(`${this.mqttTopic}/${aMsg.Type.name}/Speed`, `${aMsg.Speed}`);
+            } else if (aMsg instanceof SingleMotorVibrateCmd) {
+              this.mqttClient.publish(`${this.mqttTopic}/${aMsg.Type.name}/Speed`, `${aMsg.Speed}`);
+            }
+          }
+
           for (const device of this.devices) {
             if (device.AllowedMessages.indexOf(aMsg.Type.name) === -1) {
               continue;
@@ -219,6 +299,7 @@ export default class App extends Vue {
           }
         }
       }
+
       if (!this.paused) {
         this.runHapticsLoop();
       }
