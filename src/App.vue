@@ -135,6 +135,13 @@
                     <v-checkbox
                       v-model="showHapticsTimeline"
                       label="Show Haptics Timeline"></v-checkbox>
+                      <v-slider
+                      v-bind:label="'Haptics Offset (' + hapticsOffsetMillis.toLocaleString() + 'ms)'"
+            v-model="hapticsOffsetMillis"
+            class="align-center"
+            :max="500"
+            :min="0"
+          />
                   </v-flex>
                   <v-flex>
                     <v-subheader>Optics</v-subheader>

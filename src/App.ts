@@ -70,6 +70,7 @@ export default class App extends Vue {
   private hapticsFile: File | null = null;
   private hapticCommandsSize: number = 0;
   private hapticCommandsType: string = "";
+  private hapticsOffsetMillis: number = 0;
   private paused: boolean = true;
   private lastIndexRetrieved: number = -1;
   private lastTimeChecked: number = 0;
@@ -283,25 +284,28 @@ export default class App extends Vue {
 
   private runHapticsLoop() {
     window.requestAnimationFrame(() => {
+
+      const offsetPlayTime: number = this.currentPlayTime + this.hapticsOffsetMillis;
+
       // If we paused before this fired, just return
       if (this.paused || this.commands.size === 0) {
         return;
       }
       // Backwards seek. Reset index retreived.
-      if (this.currentPlayTime < this.lastTimeChecked) {
+      if (offsetPlayTime < this.lastTimeChecked) {
         this.lastIndexRetrieved = -1;
       }
-      this.lastTimeChecked = this.currentPlayTime;
+      this.lastTimeChecked = offsetPlayTime;
       if (this.lastIndexRetrieved + 1 > this.commandTimes.length) {
         // We're at the end of our haptics data
         return;
       }
-      if (this.currentPlayTime <= this.commandTimes[this.lastIndexRetrieved + 1]) {
+      if (offsetPlayTime <= this.commandTimes[this.lastIndexRetrieved + 1]) {
         this.runHapticsLoop();
         return;
       }
       // There are faster ways to do this.
-      while (this.currentPlayTime > this.commandTimes[this.lastIndexRetrieved + 1]) {
+      while (offsetPlayTime > this.commandTimes[this.lastIndexRetrieved + 1]) {
         this.lastIndexRetrieved += 1;
       }
 
