@@ -110,7 +110,9 @@
                     <!-- need file input here -->
                     <v-file-input
                       @file="SetVideoFile"
-                      label="Choose Movie File"></v-file-input>
+                      label="Choose Movie File"
+                      webkitdirectory="true"
+                      ></v-file-input>
                     <v-text-field
                       clearable
                       prepend-icon="video_library"
