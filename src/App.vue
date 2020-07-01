@@ -23,13 +23,14 @@
           <v-flex xs10 lg8>
             <v-card class="intro-card">
               <v-layout row wrap>
-                <v-flex class="intro-flex">
+		<v-flex class="intro-flex">
                   <v-card-media :src="require('../static/images/syncydinklogo.svg')" height="150px">
                   </v-card-media>
                   <v-card-title primary-title>
                     <div class="headline">Syncydink (Updated {{ config.short_build_date }})</div>
                   </v-card-title>
                   <v-card-text class="intro-text">
+		    <p><strong>This is a FORK of the original syncydink with some experimental and work in progress features. The official version is hosted at <a href="https://syncydink.buttplug.world/">https://syncydink.buttplug.world/</a> !!!</strong></p>
                     <p>Welcome to Syncydink, the hardware synced movie player by <a href="https://buttplug.io">Team Buttplug</a>! (More info and documentation coming soon!)</p>
                     <p>To start:</p>
                     <ul>
