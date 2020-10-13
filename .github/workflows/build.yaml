@@ -19,9 +19,9 @@ jobs:
       uses: actions/setup-node@v1
       with:
         node-version: 12.x
-    - run: npm install
-    - run: npm run build
-    - run: npm run deploy
+    - run: yarn install
+    - run: yarn run build
+    - run: yarn run deploy
       env:
         CI: true
     - name: Deploy 🚀
