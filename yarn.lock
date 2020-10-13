@@ -455,6 +455,11 @@
   resolved "https://registry.yarnpkg.com/@types/video.js/-/video.js-7.2.10.tgz#089247caa7eb3748768e4550d5c7191c37f571ba"
   integrity sha512-BkFR2zgDIYNhlRCR/zUrDkXkJRO0y0c1HgZigsF+Ow9Wb1kM6XkTpM7C7iSUG7t1buNLDsw7FG0QYDd+ZoUuoQ==
 
+"@types/web-bluetooth@0.0.9":
+  version "0.0.9"
+  resolved "https://registry.yarnpkg.com/@types/web-bluetooth/-/web-bluetooth-0.0.9.tgz#bfd545f6cbc32fc9d92e9543b5ea18ba0957e955"
+  integrity sha512-P6oHnRSEqRCR1fdAtJXmKBiHE3fOWtNFyfjm9NQZPrxdQjSZgRSiKRiHjLyKBh8eCvM8ldDS8/VJN0qKg0Pk1Q==
+
 "@types/webgl-ext@0.0.30":
   version "0.0.30"
   resolved "https://registry.yarnpkg.com/@types/webgl-ext/-/webgl-ext-0.0.30.tgz#0ce498c16a41a23d15289e0b844d945b25f0fb9d"

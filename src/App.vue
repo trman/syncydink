@@ -94,11 +94,14 @@
             <v-tab href="#buttplugpanel">
               Buttplug
             </v-tab>
+            <v-tab href="#mqttpanel">
+              MQTT
+            </v-tab>
+            <v-tab href="#coyotepanel">
+              Coyote
+            </v-tab>
             <v-tab href="#tobiipanel">
               Tobii
-            </v-tab>
-            <v-tab href="#tfspanel">
-              Tensorflow.js
             </v-tab>
             <v-tab href="#aboutpanel">
               About
@@ -144,14 +147,63 @@
             :min="0"
           />
                   </v-flex>
-                  <v-flex>
-                    <v-subheader>Optics</v-subheader>
-                    <!-- need file input here -->
-                    <v-checkbox
-                      v-model="loadTensorflowModel"
-                      label="Load Tensorflow Model"></v-checkbox>
+
+                  <!-- <v-flex v-if="this.hapticCommandsSize != 0">
+                       <ul class="haptics-info">
+                       <li># of Haptic Commands Loaded: {{ this.hapticCommandsSize }}</li>
+                       <li>Haptics Type: {{ this.hapticCommandsType }}</li>
+                       </ul>
+                       </v-flex> -->
+                </v-layout>
+              </v-tab-item>
+              <v-tab-item id="buttplugpanel">
+                <buttplug-panel
+                  ref="buttplugPanel"
+                  @deviceconnected="OnDeviceConnected"
+                  @devicedisconnected="OnDeviceDisconnected"
+                />
+              </v-tab-item>
+              <v-tab-item id="coyotepanel">
+                <v-layout column id="buttplug-connection-manager" class="buttplug-sidebar">
+                  <v-subheader>Connection</v-subheader>
+                  <v-flex row v-if="coyote !== null">
+                    <v-text-field
+                        aria-readonly="true"
+                        label="Power A"
+                        class="form-text v-input--is-readonly"
+                        v-model="coyotePower.powerA">
+                    </v-text-field>
+                    <v-text-field
+                        aria-readonly="true"
+                        label="Power B"
+                        class="form-text v-input--is-readonly"
+                        v-model="coyotePower.powerB">
+                    </v-text-field>
                   </v-flex>
+                  <v-btn
+                      v-if="coyote === null"
+                      @click="connectCoyote">Connect</v-btn>
+                </v-layout>
+              </v-tab-item>
+              <v-tab-item id="tobiipanel">
+                  <v-layout column id="buttplug-connection-manager" class="buttplug-sidebar">
+                  <v-subheader>Connection</v-subheader>
+                  <v-flex row v-if="!isTobiiConnected">
+                    <v-text-field
+                      label="TobiiSocketServer Address"
+                      class="form-text"
+                      v-model="tobiiAddress">
+                    </v-text-field>
+                  </v-flex>
+                  <v-btn
+                    v-if="!isTobiiConnected"
+                    @click="connectTobii">Connect</v-btn>
+                  </v-layout>
+              </v-tab-item>
+              <v-tab-item id="mqttpanel">
+                <v-layout column class="sidebar-form">
                   <v-flex>
+                     <v-flex>
                     <v-subheader>MQTT</v-subheader>
                       <v-text-field
                       clearable
@@ -186,40 +238,10 @@
                         v-if="mqttConnected"
                         @click="disconnectMqtt">Disconnect</v-btn>
                   </v-flex>
-
-
-                  <!-- <v-flex v-if="this.hapticCommandsSize != 0">
-                       <ul class="haptics-info">
-                       <li># of Haptic Commands Loaded: {{ this.hapticCommandsSize }}</li>
-                       <li>Haptics Type: {{ this.hapticCommandsType }}</li>
-                       </ul>
-                       </v-flex> -->
-                </v-layout>
-              </v-tab-item>
-              <v-tab-item id="buttplugpanel">
-                <buttplug-panel
-                  ref="buttplugPanel"
-                  @deviceconnected="OnDeviceConnected"
-                  @devicedisconnected="OnDeviceDisconnected"
-                />
-              </v-tab-item>
-              <v-tab-item id="tobiipanel">
-                  <v-layout column id="buttplug-connection-manager" class="buttplug-sidebar">
-                  <v-subheader>Connection</v-subheader>
-                  <v-flex row v-if="!isTobiiConnected">
-                    <v-text-field
-                      label="TobiiSocketServer Address"
-                      class="form-text"
-                      v-model="tobiiAddress">
-                    </v-text-field>
                   </v-flex>
-                  <v-btn
-                    v-if="!isTobiiConnected"
-                    @click="connectTobii">Connect</v-btn>
                   </v-layout>
-              </v-tab-item>
-              <v-tab-item id="tfspanel">
-                <p>TFS!</p>
+
+
               </v-tab-item>
               <v-tab-item id="aboutpanel">
                 <p><b>Syncydink</b></p>

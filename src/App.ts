@@ -24,7 +24,8 @@ import { ButtplugPanelComponent } from "vue-buttplug-material-component";
 import { utils } from "aframe";
 import { watch } from "fs";
 import { connect, MqttClient } from "mqtt";
-import { local } from "d3";
+import * as d3 from "d3";
+import {CoyoteDevice, CoyotePower, pairDevice} from "./utils/Coyote";
 
 @Component({
   components: {
@@ -56,6 +57,7 @@ export default class App extends Vue {
   private mqttUser: string | null = localStorage.getItem("mqttUser");
   private mqttPassword: string | null = localStorage.getItem("mqttPassword");
   private mqttClient: MqttClient | null = null;
+  private coyote: CoyoteDevice | null = null;
   private mqttLastPublishedPlaytime: number = 0;
   private currentPlayTime: number = 0;
 
@@ -73,6 +75,7 @@ export default class App extends Vue {
   private hapticsOffsetMillis: number = 0;
   private paused: boolean = true;
   private lastIndexRetrieved: number = -1;
+  private lastHapticsIndexRetrieved: number = -1;
   private lastTimeChecked: number = 0;
   private desiredPlayTime: number = 0;
 
@@ -83,6 +86,9 @@ export default class App extends Vue {
 
   // Tobii properties
   private readonly tobiiAddress: string = "ws://localhost:TODOPORT";
+
+  // Coyote properties
+  private coyotePower: CoyotePower = { powerA: 0, powerB: 0 };
 
   /////////////////////////////////////
   // Component and UI methods
@@ -156,6 +162,17 @@ export default class App extends Vue {
       this.mqttConnected = false;
       localStorage.removeItem("mqttConnectedSuccessfully");
     });
+  }
+
+  private connectTobii() {
+    // TODO
+  }
+
+  private async connectCoyote() {
+    const dev = await pairDevice(undefined, (power) => {
+        this.coyotePower = power;
+    });
+    this.coyote = dev[1];
   }
 
   private connectMqtt() {
@@ -246,6 +263,8 @@ export default class App extends Vue {
     this.hapticCommandsSize = hapticCommandsSize;
   }
 
+  private onProgress() { /* noop */ }
+
   private onPlay() {
     this.paused = false;
     this.runHapticsLoop();
@@ -261,6 +280,10 @@ export default class App extends Vue {
     }
     if (this.mqttClient && this.mqttClient.connected) {
       this.mqttClient.publish(`${this.mqttTopic}/playing`, "false", { retain: true, qos: 1 });
+    }
+
+    if (this.coyote !== null) {
+        this.coyote.stop();
     }
   }
 
@@ -294,6 +317,7 @@ export default class App extends Vue {
       // Backwards seek. Reset index retreived.
       if (offsetPlayTime < this.lastTimeChecked) {
         this.lastIndexRetrieved = -1;
+        this.lastHapticsIndexRetrieved = -1;
       }
       this.lastTimeChecked = offsetPlayTime;
       if (this.lastIndexRetrieved + 1 > this.commandTimes.length) {
@@ -332,6 +356,28 @@ export default class App extends Vue {
             (this.$refs.buttplugPanel as any).SendDeviceMessage(device, aMsg);
           }
         }
+      }
+
+      while (offsetPlayTime > this.hapticsCommands[this.lastHapticsIndexRetrieved + 1].Time) {
+        this.lastHapticsIndexRetrieved += 1;
+      }
+
+      if (this.coyote !== null) {
+        const currentTime = offsetPlayTime;
+        const {Time, Position} = this.lastHapticsIndexRetrieved  >= 0 ?
+            this.hapticsCommands[this.lastHapticsIndexRetrieved] : {Time: 0, Position: 99};
+        const nextIndex = this.lastHapticsIndexRetrieved + 1;
+        const NextTime =  (nextIndex >= this.hapticsCommands.length) ? currentTime
+            : this.hapticsCommands[this.lastHapticsIndexRetrieved + 1].Time;
+        const NextPosition = (nextIndex >= this.hapticsCommands.length) ? 99
+            : this.hapticsCommands[this.lastHapticsIndexRetrieved + 1].Position;
+
+        const interpolatedValue = d3.interpolate(Position, NextPosition)((currentTime - Time) / (NextTime - Time));
+
+        const amplitude = 31 - Math.floor(interpolatedValue / 100 * 21); // 10-31
+        const pulseDuration = 10;
+        this.coyote.writePatternA({ amplitude, pulseDuration, dutyCycle: 16});
+        this.coyote.writePatternB({ amplitude: 31 - amplitude, pulseDuration, dutyCycle: 16});
       }
 
       if (!this.paused) {
