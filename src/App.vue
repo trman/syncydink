@@ -198,10 +198,6 @@
                       v-if="knockRod === null"
                       @click="connectKnockRod">Connect</v-btn>
                 </v-layout>
-                <v-checkbox
-                    v-model="knockRodInvert"
-                    v-if="knockRodState !== null"
-                    label="Invert"></v-checkbox>
 
                 <v-slider
                     v-bind:label="'Min Depth (' + (knockRodMinDepth/100).toLocaleString() + 'mm)'"
@@ -219,6 +215,11 @@
                     :min="3000"
                     v-if="knockRodState !== null"
                 />
+
+                <v-checkbox
+                    v-model="knockRodInvert"
+                    v-if="knockRodState !== null"
+                    label="Invert"></v-checkbox>
 
                 <v-slider
                     v-bind:label="'Smoothness (' +  Math.round(100 - (knockRodSmoothness / 30 * 100)) + '%)'"

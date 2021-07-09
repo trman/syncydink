@@ -26,7 +26,6 @@ import {CoyoteDevice, CoyotePower, pairDevice} from "./utils/Coyote";
 import {KnockRod, ShockRodSize} from "./utils/knockRod";
 import {KnockRodState} from "./utils/knockRodState";
 
-
 @Component({
   components: {
     VFileInput,
@@ -60,9 +59,9 @@ export default class App extends Vue {
   private knockRod: KnockRod | null = null;
   private knockRodState: KnockRodState | null = null;
   private knockRodInvert: boolean = localStorage.getItem("knockRodInvert") === "true";
-  private knockRodMinDepth: number = parseInt(localStorage.getItem("knockRodMinDepth") || "5000");
-  private knockRodMaxDepth: number = parseInt(localStorage.getItem("knockRodMaxDepth") || "15000");
-  private knockRodSmoothness: number = parseInt(localStorage.getItem("knockRodMaxSmoothness") || "30");
+  private knockRodMinDepth: number = parseInt(localStorage.getItem("knockRodMinDepth") || "5000", 10);
+  private knockRodMaxDepth: number = parseInt(localStorage.getItem("knockRodMaxDepth") || "15000", 10);
+  private knockRodSmoothness: number = parseInt(localStorage.getItem("knockRodMaxSmoothness") || "30", 10);
 
   private coyote: CoyoteDevice | null = null;
   private mqttLastPublishedPlaytime: number = 0;
@@ -368,9 +367,8 @@ export default class App extends Vue {
       if (this.knockRod !== null && hapticsIndexChanged) {
         const current = this.hapticsCommands[this.lastHapticsIndexRetrieved] || undefined;
         const next = this.hapticsCommands[this.lastHapticsIndexRetrieved + 1] || undefined;
-        const from = current ? current : {Time: 0, Position: this.knockRodInvert ? 100 : 0 };
-        const to = next ? next : {Time: from.Time+1000, Position: from.Position}
-
+        const from = current ? current : { Time: 0, Position: this.knockRodInvert ? 100 : 0 };
+        const to = next ? next : { Time: from.Time + 1000, Position: from.Position };
 
         const minDepth = this.knockRodMinDepth;
         const maxDepth = this.knockRodMaxDepth;
@@ -379,19 +377,15 @@ export default class App extends Vue {
 
         const posMillis = d3.interpolate(minDepth, maxDepth)(posPercent);
         const nextPosMillis = d3.interpolate(minDepth, maxDepth)(nextposPercent);
-        const remainingTime = to.Time - from.Time;
-        const posDelta = Math.abs(nextPosMillis - posMillis);
-
-        const reqVelocity = Math.round(posDelta / remainingTime * 1000);
+        const deltaT = to.Time - from.Time;
+        const deltaS = Math.abs(nextPosMillis - posMillis);
+        const velocity = Math.round(deltaS / deltaT * 1000);
         const velocityCapped =
-            Math.max(500, Math.min(35000, Math.round(reqVelocity)));
+            Math.max(500, Math.min(35000, Math.round(velocity)));
 
         this.knockRod.moveTo(nextPosMillis, velocityCapped, this.knockRodSmoothness);
 
       }
-
-
-
 
       if (msgs !== undefined) {
         this.currentMessages = msgs!;
@@ -406,7 +400,6 @@ export default class App extends Vue {
             }
           }
 
-
           for (const device of this.devices) {
             if (device.AllowedMessages.indexOf(aMsg.Type.name) === -1) {
               continue;
@@ -415,8 +408,6 @@ export default class App extends Vue {
           }
         }
       }
-
-
 
       if (this.coyote !== null) {
         const currentTime = offsetPlayTime;
