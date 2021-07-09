@@ -100,6 +100,9 @@
             <v-tab href="#coyotepanel">
               Coyote
             </v-tab>
+            <v-tab href="#knockrodpanel">
+              KnockRod
+            </v-tab>
             <v-tab href="#tobiipanel">
               Tobii
             </v-tab>
@@ -185,6 +188,48 @@
                       @click="connectCoyote">Connect</v-btn>
                 </v-layout>
               </v-tab-item>
+              <v-tab-item id="knockrodpanel">
+                <v-layout column id="buttplug-connection-manager" class="buttplug-sidebar">
+                  <v-subheader>Connection</v-subheader>
+                  <v-flex row v-if="coyote !== null">
+                      Connected! Yay!
+                  </v-flex>
+                  <v-btn
+                      v-if="knockRod === null"
+                      @click="connectKnockRod">Connect</v-btn>
+                </v-layout>
+                <v-checkbox
+                    v-model="knockRodInvert"
+                    v-if="knockRodState !== null"
+                    label="Invert"></v-checkbox>
+
+                <v-slider
+                    v-bind:label="'Min Depth (' + (knockRodMinDepth/100).toLocaleString() + 'mm)'"
+                    v-model="knockRodMinDepth"
+                    class="align-center"
+                    :max="19000"
+                    :min="2000"
+                    v-if="knockRodState !== null"
+                />
+                <v-slider
+                    v-bind:label="'Max Depth (' + (knockRodMaxDepth/100).toLocaleString() + 'mm)'"
+                    v-model="knockRodMaxDepth"
+                    class="align-center"
+                    :max="20000"
+                    :min="3000"
+                    v-if="knockRodState !== null"
+                />
+
+                <v-slider
+                    v-bind:label="'Smoothness (' +  Math.round(100 - (knockRodSmoothness / 30 * 100)) + '%)'"
+                    v-model="knockRodSmoothness"
+                    class="align-center"
+                    :min="1"
+                    :max="30"
+                    v-if="knockRodState !== null"
+                />
+              </v-tab-item>
+
               <v-tab-item id="tobiipanel">
                   <v-layout column id="buttplug-connection-manager" class="buttplug-sidebar">
                   <v-subheader>Connection</v-subheader>

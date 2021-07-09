@@ -9,7 +9,7 @@ import {
   SingleMotorVibrateCmd,
 } from "buttplug";
 import {
-  HapticCommand, KiirooCommand, HapticFileHandler, LoadFile, LoadString,
+  HapticFileHandler, LoadFile, LoadString,
   FunscriptCommand,
 } from "haptic-movie-file-reader";
 
@@ -19,13 +19,13 @@ import VideoEncoderComponent from "./components/VideoEncoder/VideoEncoder.vue";
 import PatreonButtonComponent from "./components/PatreonButton/PatreonButton.vue";
 
 import * as Mousetrap from "mousetrap";
-import { ButtplugPanelComponent } from "vue-buttplug-material-component";
 
-import { utils } from "aframe";
-import { watch } from "fs";
 import { connect, MqttClient } from "mqtt";
 import * as d3 from "d3";
 import {CoyoteDevice, CoyotePower, pairDevice} from "./utils/Coyote";
+import {KnockRod, ShockRodSize} from "./utils/knockRod";
+import {KnockRodState} from "./utils/knockRodState";
+
 
 @Component({
   components: {
@@ -57,6 +57,13 @@ export default class App extends Vue {
   private mqttUser: string | null = localStorage.getItem("mqttUser");
   private mqttPassword: string | null = localStorage.getItem("mqttPassword");
   private mqttClient: MqttClient | null = null;
+  private knockRod: KnockRod | null = null;
+  private knockRodState: KnockRodState | null = null;
+  private knockRodInvert: boolean = localStorage.getItem("knockRodInvert") === "true";
+  private knockRodMinDepth: number = parseInt(localStorage.getItem("knockRodMinDepth") || "5000");
+  private knockRodMaxDepth: number = parseInt(localStorage.getItem("knockRodMaxDepth") || "15000");
+  private knockRodSmoothness: number = parseInt(localStorage.getItem("knockRodMaxSmoothness") || "30");
+
   private coyote: CoyoteDevice | null = null;
   private mqttLastPublishedPlaytime: number = 0;
   private currentPlayTime: number = 0;
@@ -75,7 +82,7 @@ export default class App extends Vue {
   private hapticsOffsetMillis: number = 0;
   private paused: boolean = true;
   private lastIndexRetrieved: number = -1;
-  private lastHapticsIndexRetrieved: number = -1;
+  private lastHapticsIndexRetrieved: number =  -1;
   private lastTimeChecked: number = 0;
   private desiredPlayTime: number = 0;
 
@@ -157,11 +164,13 @@ export default class App extends Vue {
   }
 
   private disconnectMqtt() {
-    this.mqttClient?.end(true, {}, () => {
-      this.mqttClient = null;
-      this.mqttConnected = false;
-      localStorage.removeItem("mqttConnectedSuccessfully");
-    });
+    if (this.mqttClient) {
+      this.mqttClient.end(true, {}, () => {
+        this.mqttClient = null;
+        this.mqttConnected = false;
+        localStorage.removeItem("mqttConnectedSuccessfully");
+      });
+    }
   }
 
   private connectTobii() {
@@ -175,6 +184,17 @@ export default class App extends Vue {
     this.coyote = dev[1];
   }
 
+  private async connectKnockRod() {
+
+    const ports = await window.navigator.serial.getPorts();
+    const port = ports.length === 0 ? await window.navigator.serial.requestPort({}) : ports[0];
+    const t = new KnockRod(port, ShockRodSize.EightInch);
+    t.addEventListener("stateChange", (e) => this.knockRodState = e.detail.state);
+    await t.init();
+    this.knockRod = t;
+
+  }
+
   private connectMqtt() {
     this.rememberMqttSettings();
     this.disconnectMqtt();
@@ -182,13 +202,15 @@ export default class App extends Vue {
     this.mqttClient = connect(this.mqttServer, {
       username: this.mqttUser || undefined,
       password: this.mqttPassword || undefined,
-      will: { topic: `${this.mqttTopic}/state`, qos: 1, retain: true, payload: "gone" },
+      will: { topic: this.mqttTopic + "/state", qos: 1, retain: true, payload: "gone" },
     });
     this.mqttClient.once("connect",
       () => {
-        this.mqttClient?.publish(`${this.mqttTopic}/state`, "ready", { retain: true, qos: 1 });
-        this.mqttConnected = true;
-        localStorage.setItem("mqttConnectedSuccessfully", "true");
+      if (this.mqttClient) {
+        this.mqttClient.publish(this.mqttTopic + "/state", "ready", { retain: true, qos: 1 });
+      }
+      this.mqttConnected = true;
+      localStorage.setItem("mqttConnectedSuccessfully", "true");
       });
 
     this.mqttClient.subscribe(`${this.mqttTopic}/pause/set`, { qos: 1 });
@@ -287,16 +309,16 @@ export default class App extends Vue {
     }
   }
 
-  private onTimeUpdate(time: number) {
-    this.currentPlayTime = time;
-    if (this.mqttClient && this.mqttClient.connected && (time - this.mqttLastPublishedPlaytime) > 100) {
-      this.mqttLastPublishedPlaytime = time;
-      this.mqttClient.publish(`${this.mqttTopic}/currentPlayTime`, `${time}`, { retain: true, qos: 1 });
+  private onTimeUpdate(t: number) {
+    this.currentPlayTime = t;
+    if (this.mqttClient && this.mqttClient.connected && (t - this.mqttLastPublishedPlaytime) > 100) {
+      this.mqttLastPublishedPlaytime = t;
+      this.mqttClient.publish(`${this.mqttTopic}/currentPlayTime`, `${t}`, { retain: true, qos: 1 });
     }
   }
 
-  private onInputTimeUpdate(time: number) {
-    this.desiredPlayTime = time;
+  private onInputTimeUpdate(t: number) {
+    this.desiredPlayTime = t;
     this.currentPlayTime = this.desiredPlayTime;
   }
 
@@ -336,6 +358,41 @@ export default class App extends Vue {
       const currentMsgTime = this.commandTimes[this.lastIndexRetrieved];
 
       const msgs = this.commands.get(currentMsgTime) || [];
+
+      let hapticsIndexChanged = false;
+      while (offsetPlayTime > this.hapticsCommands[this.lastHapticsIndexRetrieved + 1].Time) {
+        this.lastHapticsIndexRetrieved += 1;
+        hapticsIndexChanged = true;
+      }
+
+      if (this.knockRod !== null && hapticsIndexChanged) {
+        const current = this.hapticsCommands[this.lastHapticsIndexRetrieved] || undefined;
+        const next = this.hapticsCommands[this.lastHapticsIndexRetrieved + 1] || undefined;
+        const from = current ? current : {Time: 0, Position: this.knockRodInvert ? 100 : 0 };
+        const to = next ? next : {Time: from.Time+1000, Position: from.Position}
+
+
+        const minDepth = this.knockRodMinDepth;
+        const maxDepth = this.knockRodMaxDepth;
+        const posPercent = this.knockRodInvert ? (100 - from.Position) / 100.0 : from.Position / 100.0;
+        const nextposPercent = this.knockRodInvert ? (100 - to.Position) / 100.0 : to.Position / 100.0;
+
+        const posMillis = d3.interpolate(minDepth, maxDepth)(posPercent);
+        const nextPosMillis = d3.interpolate(minDepth, maxDepth)(nextposPercent);
+        const remainingTime = to.Time - from.Time;
+        const posDelta = Math.abs(nextPosMillis - posMillis);
+
+        const reqVelocity = Math.round(posDelta / remainingTime * 1000);
+        const velocityCapped =
+            Math.max(500, Math.min(35000, Math.round(reqVelocity)));
+
+        this.knockRod.moveTo(nextPosMillis, velocityCapped, this.knockRodSmoothness);
+
+      }
+
+
+
+
       if (msgs !== undefined) {
         this.currentMessages = msgs!;
         for (const aMsg of msgs) {
@@ -349,6 +406,7 @@ export default class App extends Vue {
             }
           }
 
+
           for (const device of this.devices) {
             if (device.AllowedMessages.indexOf(aMsg.Type.name) === -1) {
               continue;
@@ -358,9 +416,7 @@ export default class App extends Vue {
         }
       }
 
-      while (offsetPlayTime > this.hapticsCommands[this.lastHapticsIndexRetrieved + 1].Time) {
-        this.lastHapticsIndexRetrieved += 1;
-      }
+
 
       if (this.coyote !== null) {
         const currentTime = offsetPlayTime;
